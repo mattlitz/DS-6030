@@ -1,0 +1,187 @@
+---
+title: "HW 8"
+author: "Matthew Litz"
+date: "`r format(Sys.Date(), '%b %d, %Y')`"
+output:
+  html_document:
+    number_sections: true    
+    toc: true
+    toc_float: true
+    theme: cosmo
+    highlight: espresso    
+# You can make the format personal - this will get you started:  
+# https://bookdown.org/yihui/rmarkdown/html-document.html#appearance_and_style    
+---
+
+<!--- Below are global settings for knitr. You can override any of them by adding the changes to individual chunks --->
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(error=TRUE,        # Keep compiling upon error
+                      collapse=FALSE,    # collapse by default
+                      echo=TRUE,         # echo code by default
+                      comment = "#>",    # change comment character
+                      fig.width = 5.5,     # set figure width
+                      fig.align = "center",# set figure position
+                      out.width = "49%", # set width of displayed images
+                      warning=TRUE,      # show R warnings
+                      message=TRUE)      # show R messages
+
+library(tidyverse)
+library(caret)
+library(ISLR)
+
+```
+
+<!--- Change font sizes (or other css modifications) --->
+<style>
+h1.title {
+  font-size: 2.2em; /* Title font size */
+}
+h1 {
+  font-size: 2em;   /* Header 1 font size */
+}
+h2 {
+  font-size: 1.5em;
+}
+h3 { 
+  font-size: 1.2em;
+}
+pre {
+  font-size: 0.8em;  /* Code and R output font size */
+}
+</style>
+
+
+
+**DS 6030 | Summer 2021 | University of Virginia **
+
+*******************************************
+
+
+# Question 8
+In the lab, a classification tree was applied to the Carseats data set after converting Sales into a qualitative response variable. Now we will seek to predict Sales using regression trees and related approaches, treating the response as a quantitative variable.
+
+
+(a) Split the data set into a training set and a test set.
+
+```{r question_9a, echo=TRUE, warnings=FALSE, messages=FALSE}
+
+carseats <- data.frame(Carseats)
+attach(carseats)
+
+
+#Create training and test splits
+train.rows <- sample(rownames(carseats), dim(carseats)[1]*0.60)
+carseats_train <- carseats[train.rows, ]
+carseats_test <- carseats[setdiff(rownames(carseats), train.rows), ]
+c(dim(carseats_train)[1], dim(carseats_test)[1])
+
+
+```
+
+(b) Fit a regression tree to the training set. Plot the tree, and interpret the results. What test MSE do you obtain?
+
+
+
+
+(c) Use cross-validation in order to determine the optimal level of tree complexity. Does pruning the tree improve the test MSE?
+
+
+
+
+(d) Use the bagging approach in order to analyze this data. What test MSE do you obtain? Use the importance() function to determine which variables are most important.
+
+
+
+
+
+
+(e) Use random forests to analyze this data. What test MSE do you obtain? Use the importance() function to determine which variables are most important. Describe the eﬀect of m, the number of variables considered at each split, on the error rate obtained.
+
+
+
+
+```{r question_8, warning=FALSE, message=FALSE}
+
+set.seed(1)
+train = sample(1:nrow(Boston), nrow(Boston)/2)
+boston.test=Boston[-train,"medv"]
+
+# Bagging and Random Forests
+
+library(randomForest)
+
+set.seed(1)
+rf.boston=randomForest(medv~.,data=Boston,subset=train,mtry=6,importance=TRUE)
+yhat.rf = predict(rf.boston,newdata=Boston[-train,])
+mean((yhat.rf-boston.test)^2)
+importance(rf.boston)
+varImpPlot(rf.boston)
+rf.boston
+ 
+n_trees = 1:500
+
+total_error_p=0
+total_error_p_half=0
+total_error_sqrt_p=0
+
+for (i in n_trees){
+  
+  rf.boston=randomForest(medv~.,data=Boston,subset=train,mtry=6,ntree=i)
+  yhat.rf = predict(rf.boston,newdata=Boston[-train,])
+  total_error_p[i]=mean((yhat.rf-boston.test)^2)
+
+  rf.boston=randomForest(medv~.,data=Boston,subset=train,mtry=3,ntree=i)
+  yhat.rf = predict(rf.boston,newdata=Boston[-train,])
+  total_error_p_half[i]=mean((yhat.rf-boston.test)^2)
+  
+  rf.boston=randomForest(medv~.,data=Boston,subset=train,mtry=sqrt(6),ntree=i)
+  yhat.rf = predict(rf.boston,newdata=Boston[-train,])
+  total_error_sqrt_p[i]=mean((yhat.rf-boston.test)^2)
+}
+
+
+
+
+```
+
+
+
+# Question 11
+11. This question uses the Caravan data set.
+
+
+
+(a) Create a training set consisting of the first 1,000 observations, and a test set consisting of the remaining observations.
+
+
+(b) Fit a boosting model to the training set with Purchase as the response and the other variables as predictors. Use 1,000 trees, and a shrinkage value of 0.01. Which predictors appear to be the most important?
+
+
+
+(c) Use the boosting model to predict the response on the test data.  Predict that a person will make a purchase if the estimated probability of purchase is greater than 20 %. Form a confusion matrix. What fraction of the people predicted to make a purchase do in fact make one? How does this compare with the results obtained from applying KNN or logistic regression to this data set?
+
+
+```{r question_9, echo=TRUE, warnings=FALSE, messages=FALSE}
+library(rpart)
+library(tidyverse)
+library(ISLR)
+library(partykit)
+
+oj <- data.frame(OJ)
+attach(oj)
+
+
+#Create training and test splits
+train.rows <- sample(rownames(oj), dim(oj)[1]*0.748)
+oj_train <- oj[train.rows, ]
+oj_test <- oj[setdiff(rownames(oj), train.rows), ]
+c(dim(oj_train)[1], dim(oj_test)[1])
+
+
+```
+
+
+
+```
+
