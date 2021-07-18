@@ -29,7 +29,7 @@ knitr::opts_chunk$set(error=TRUE,        # Keep compiling upon error
 library(tidyverse)
 library(caret)
 library(ISLR)
-
+library(tree)
 ```
 
 <!--- Change font sizes (or other css modifications) --->
@@ -70,6 +70,7 @@ carseats <- data.frame(Carseats)
 attach(carseats)
 
 
+
 #Create training and test splits
 train.rows <- sample(rownames(carseats), dim(carseats)[1]*0.60)
 carseats_train <- carseats[train.rows, ]
@@ -83,14 +84,72 @@ c(dim(carseats_train)[1], dim(carseats_test)[1])
 
 
 
+```{r question_8b, echo=TRUE}
+set.seed(1)
+
+
+#fit regression tree
+tree.carseats <- rpart::rpart(Sales~., data=carseats_train, method='anova')
+tree.carseats.party <- partykit::as.party(tree.carseats)
+tree.carseats.party
+
+#plot tree
+ggparty::ggparty(tree.carseats.party, horizontal=TRUE) +
+  ggparty::geom_edge() +
+  ggparty::geom_edge_label() +
+  ggparty::geom_node_label(aes(label=splitvar), ids="inner") + 
+  ggparty::geom_node_plot(gglist = list(geom_histogram(aes(x=Sales), binwidth=3),
+                                        theme(axis.title.x = element_blank(),
+                                              axis.title.y = element_blank()))) +
+  ggtitle('Decision Tree and resulting `Sales` bins')
+
+
+
+
+
+
+```
+
+
 
 (c) Use cross-validation in order to determine the optimal level of tree complexity. Does pruning the tree improve the test MSE?
+
+
+```{r question_8c, echo=TRUE}
+
+set.seed(1)
+c <- rpart::rpart.control(minsplit=6,  minbucket=3, cp=0, maxdepth=9)
+tree.v2.boston <- rpart::rpart(medv~., data=boston, method='anova', control=c)
+tree.v2.boston.cp <- as_tibble(tree.v2.boston$cptable)$CP
+
+
+set.seed(1)
+boston.caret_rpart <- caret::train(medv~., data=boston, 
+                                   method='rpart', 
+                                   tuneGrid=data.frame(cp=tree.v2.boston.cp),
+                                   control=c,
+                      trControl=caret::trainControl("cv", number=5,
+                                                    returnResamp='all'))
+
+
+
+
+
+
+```
+
 
 
 
 
 (d) Use the bagging approach in order to analyze this data. What test MSE do you obtain? Use the importance() function to determine which variables are most important.
 
+```{r question_8d, echo=TRUE}
+
+
+
+
+```
 
 
 
@@ -100,45 +159,7 @@ c(dim(carseats_train)[1], dim(carseats_test)[1])
 
 
 
-
-```{r question_8, warning=FALSE, message=FALSE}
-
-set.seed(1)
-train = sample(1:nrow(Boston), nrow(Boston)/2)
-boston.test=Boston[-train,"medv"]
-
-# Bagging and Random Forests
-
-library(randomForest)
-
-set.seed(1)
-rf.boston=randomForest(medv~.,data=Boston,subset=train,mtry=6,importance=TRUE)
-yhat.rf = predict(rf.boston,newdata=Boston[-train,])
-mean((yhat.rf-boston.test)^2)
-importance(rf.boston)
-varImpPlot(rf.boston)
-rf.boston
- 
-n_trees = 1:500
-
-total_error_p=0
-total_error_p_half=0
-total_error_sqrt_p=0
-
-for (i in n_trees){
-  
-  rf.boston=randomForest(medv~.,data=Boston,subset=train,mtry=6,ntree=i)
-  yhat.rf = predict(rf.boston,newdata=Boston[-train,])
-  total_error_p[i]=mean((yhat.rf-boston.test)^2)
-
-  rf.boston=randomForest(medv~.,data=Boston,subset=train,mtry=3,ntree=i)
-  yhat.rf = predict(rf.boston,newdata=Boston[-train,])
-  total_error_p_half[i]=mean((yhat.rf-boston.test)^2)
-  
-  rf.boston=randomForest(medv~.,data=Boston,subset=train,mtry=sqrt(6),ntree=i)
-  yhat.rf = predict(rf.boston,newdata=Boston[-train,])
-  total_error_sqrt_p[i]=mean((yhat.rf-boston.test)^2)
-}
+```{r question_8e, echo=TRUE}
 
 
 
@@ -147,36 +168,59 @@ for (i in n_trees){
 
 
 
+
+
 # Question 11
 11. This question uses the Caravan data set.
 
+```{r question_11, warning=FALSE, message=FALSE}
+
+caravan <- data.frame(Caravan)
+attach(caravan)
+
+
+```
 
 
 (a) Create a training set consisting of the first 1,000 observations, and a test set consisting of the remaining observations.
 
+```{r question_11a, warning=FALSE, message=FALSE}
+
+#Create training and test splits
+train.rows <- sample(rownames(caravan), dim(caravan)[1]*0.1718)
+caravan_train <- caravan[train.rows, ]
+caravan_test <- caravan[setdiff(rownames(caravan), train.rows), ]
+c(dim(caravan_train)[1], dim(caravan_test)[1])
+
+
+```
+
 
 (b) Fit a boosting model to the training set with Purchase as the response and the other variables as predictors. Use 1,000 trees, and a shrinkage value of 0.01. Which predictors appear to be the most important?
+
+```{r question_11b, echo=TRUE, warnings=FALSE, messages=FALSE}
+
+
+
+
+
+
+```
+
+
+
 
 
 
 (c) Use the boosting model to predict the response on the test data.  Predict that a person will make a purchase if the estimated probability of purchase is greater than 20 %. Form a confusion matrix. What fraction of the people predicted to make a purchase do in fact make one? How does this compare with the results obtained from applying KNN or logistic regression to this data set?
 
 
-```{r question_9, echo=TRUE, warnings=FALSE, messages=FALSE}
-library(rpart)
-library(tidyverse)
-library(ISLR)
-library(partykit)
-
-oj <- data.frame(OJ)
-attach(oj)
+```{r question_11c, echo=TRUE, warnings=FALSE, messages=FALSE}
 
 
-#Create training and test splits
-train.rows <- sample(rownames(oj), dim(oj)[1]*0.748)
-oj_train <- oj[train.rows, ]
-oj_test <- oj[setdiff(rownames(oj), train.rows), ]
-c(dim(oj_train)[1], dim(oj_test)[1])
+
+
+
 
 
 ```
