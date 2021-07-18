@@ -30,6 +30,8 @@ library(tidyverse)
 library(caret)
 library(ISLR)
 library(tree)
+library(randomForest)
+library(xgboost)
 ```
 
 <!--- Change font sizes (or other css modifications) --->
@@ -87,71 +89,64 @@ c(dim(carseats_train)[1], dim(carseats_test)[1])
 ```{r question_8b, echo=TRUE}
 set.seed(1)
 
+#base r
+tree.carseats=tree(Sales~.,carseats_train)
+summary(tree.carseats)
+plot(tree.carseats)
+text(tree.carseats,pretty=0)
 
-#fit regression tree
-tree.carseats <- rpart::rpart(Sales~., data=carseats_train, method='anova')
-tree.carseats.party <- partykit::as.party(tree.carseats)
-tree.carseats.party
-
-#plot tree
-ggparty::ggparty(tree.carseats.party, horizontal=TRUE) +
-  ggparty::geom_edge() +
-  ggparty::geom_edge_label() +
-  ggparty::geom_node_label(aes(label=splitvar), ids="inner") + 
-  ggparty::geom_node_plot(gglist = list(geom_histogram(aes(x=Sales), binwidth=3),
-                                        theme(axis.title.x = element_blank(),
-                                              axis.title.y = element_blank()))) +
-  ggtitle('Decision Tree and resulting `Sales` bins')
-
-
-
-
+#calculating test MSE
+yhat=predict(tree.carseats,newdata=carseats_test)
+mean((yhat-carseats_test$Sales)^2)
 
 
 ```
 
-
+A test MSE of 5.17302 was obtained.
 
 (c) Use cross-validation in order to determine the optimal level of tree complexity. Does pruning the tree improve the test MSE?
 
 
 ```{r question_8c, echo=TRUE}
 
-set.seed(1)
-c <- rpart::rpart.control(minsplit=6,  minbucket=3, cp=0, maxdepth=9)
-tree.v2.boston <- rpart::rpart(medv~., data=boston, method='anova', control=c)
-tree.v2.boston.cp <- as_tibble(tree.v2.boston$cptable)$CP
 
+cv.tree.carseats=cv.tree(tree.carseats)
+plot(cv.tree.carseats$size,cv.tree.carseats$dev,type='b')
+prune.carseats=prune.tree(tree.carseats,best=5)
+plot(prune.carseats)
+text(prune.carseats,pretty=0)
 
-set.seed(1)
-boston.caret_rpart <- caret::train(medv~., data=boston, 
-                                   method='rpart', 
-                                   tuneGrid=data.frame(cp=tree.v2.boston.cp),
-                                   control=c,
-                      trControl=caret::trainControl("cv", number=5,
-                                                    returnResamp='all'))
-
-
+#calculating test MSE
+yhat=predict(prune.carseats,newdata=carseats_test)
+mean((yhat-carseats_test$Sales)^2)
 
 
 
 
 ```
 
-
-
+The new test MSE is 4.620164 - a slight reduction in the test MSE was obtained through pruning.
 
 
 (d) Use the bagging approach in order to analyze this data. What test MSE do you obtain? Use the importance() function to determine which variables are most important.
 
 ```{r question_8d, echo=TRUE}
 
+set.seed(123)
+bag.carseats=randomForest(Sales~.,data=carseats_train,mtry=10,importance=TRUE)
+bag.carseats
 
+yhat.bag = predict(bag.carseats,newdata=carseats_test)
+plot(yhat.bag, carseats_test$Sales)
+abline(0,1)
+mean((yhat-carseats_test$Sales)^2)
+
+importance(bag.carseats)
+varImpPlot(bag.carseats)
 
 
 ```
-
-
+Bagging is performed using the randomForest function when all predictors (m=10) are specified.  An MSE of 2.690961 was obtained, almost half of the MSE obtained from cross-validation.  Price and ShelveLoc were identified as the variables with the most importance.
 
 
 
@@ -161,12 +156,20 @@ boston.caret_rpart <- caret::train(medv~., data=boston,
 
 ```{r question_8e, echo=TRUE}
 
+rf.carseats=randomForest(Sales~.,data=carseats_train,mtry=5,importance=TRUE)
+rf.carseats
+#test MSE
+yhat.rf=predict(rf.carseats,newdata=carseats_test)
+mean((yhat.rf-carseats_test$Sales)^2)
+
+importance(rf.carseats)
+varImpPlot(rf.carseats)
 
 
 
 ```
 
-
+The MSE was significantly reduced with th implementation of random forests
 
 
 
