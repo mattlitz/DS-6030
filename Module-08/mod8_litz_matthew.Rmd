@@ -4,7 +4,7 @@ author: "Matthew Litz"
 date: "`r format(Sys.Date(), '%b %d, %Y')`"
 output:
   html_document:
-    number_sections: true    
+    number_sections: false    
     toc: true
     toc_float: true
     theme: cosmo
@@ -32,6 +32,10 @@ library(ISLR)
 library(tree)
 library(randomForest)
 library(xgboost)
+library(Matrix)
+library(magrittr)
+library(dplyr)
+library(glmnet)
 ```
 
 <!--- Change font sizes (or other css modifications) --->
@@ -102,7 +106,7 @@ mean((yhat-carseats_test$Sales)^2)
 
 ```
 
-A test MSE of 5.17302 was obtained.
+The test MSE output is presented within the code.
 
 (c) Use cross-validation in order to determine the optimal level of tree complexity. Does pruning the tree improve the test MSE?
 
@@ -125,7 +129,7 @@ mean((yhat-carseats_test$Sales)^2)
 
 ```
 
-The new test MSE is 4.620164 - a slight reduction in the test MSE was obtained through pruning.
+The new test MSE from pruning is a slight increase.
 
 
 (d) Use the bagging approach in order to analyze this data. What test MSE do you obtain? Use the importance() function to determine which variables are most important.
@@ -139,14 +143,14 @@ bag.carseats
 yhat.bag = predict(bag.carseats,newdata=carseats_test)
 plot(yhat.bag, carseats_test$Sales)
 abline(0,1)
-mean((yhat-carseats_test$Sales)^2)
+mean((yhat.bag-carseats_test$Sales)^2)
 
 importance(bag.carseats)
 varImpPlot(bag.carseats)
 
 
 ```
-Bagging is performed using the randomForest function when all predictors (m=10) are specified.  An MSE of 2.690961 was obtained, almost half of the MSE obtained from cross-validation.  Price and ShelveLoc were identified as the variables with the most importance.
+Bagging is performed using the randomForest function when all predictors (m=10) are specified.  An MSE was calculated that's almost half of the MSE obtained from cross-validation.  Price and ShelveLoc were identified as the variables with the most importance.
 
 
 
@@ -156,7 +160,7 @@ Bagging is performed using the randomForest function when all predictors (m=10) 
 
 ```{r question_8e, echo=TRUE}
 
-rf.carseats=randomForest(Sales~.,data=carseats_train,mtry=5,importance=TRUE)
+rf.carseats=randomForest(Sales~.,data=carseats_train,mtry=3,importance=TRUE)
 rf.carseats
 #test MSE
 yhat.rf=predict(rf.carseats,newdata=carseats_test)
@@ -169,7 +173,7 @@ varImpPlot(rf.carseats)
 
 ```
 
-The MSE was significantly reduced with th implementation of random forests
+Similiar to bagging, the MSE was significantly reduced with the implementation of random forests when compared to pruning only.  The importance function indicates that Price and ShelveLoc are the most important predictors.  Starting with m = p/3, the MSE reduces as we approach the bagging implementation of m equal to the total number of predictors (10).
 
 
 
@@ -181,7 +185,6 @@ The MSE was significantly reduced with th implementation of random forests
 caravan <- data.frame(Caravan)
 attach(caravan)
 
-
 ```
 
 
@@ -189,44 +192,167 @@ attach(caravan)
 
 ```{r question_11a, warning=FALSE, message=FALSE}
 
+set.seed(1234)
 #Create training and test splits
 train.rows <- sample(rownames(caravan), dim(caravan)[1]*0.1718)
 caravan_train <- caravan[train.rows, ]
 caravan_test <- caravan[setdiff(rownames(caravan), train.rows), ]
 c(dim(caravan_train)[1], dim(caravan_test)[1])
 
-
 ```
 
 
 (b) Fit a boosting model to the training set with Purchase as the response and the other variables as predictors. Use 1,000 trees, and a shrinkage value of 0.01. Which predictors appear to be the most important?
 
-```{r question_11b, echo=TRUE, warnings=FALSE, messages=FALSE}
+```{r question_11b, echo=FALSE, warnings=FALSE, messages=FALSE}
 
+#train and test matrices
+trainm <- sparse.model.matrix(Purchase ~.-1,data=caravan_train)
+train_label <- caravan_train[,"Purchase"]
+train_matrix <- xgb.DMatrix(data = as.matrix(trainm),label = train_label)
 
+testm <- sparse.model.matrix(Purchase ~.-1,data=caravan_test)
+test_label <- caravan_test[,"Purchase"]
+test_matrix <- xgb.DMatrix(data = as.matrix(testm),label = test_label)
 
+#Parameters
+nc <- length(unique(train_label))
+xgb_paramns <- list("objective" = "reg:squarederror",
+                    #"eval_metric" = "mlogloss",
+                    #"num_class" = nc,
+                    "learning_rate" = 0.01, #shrinkage
+                    "num_parallel_tree"=1000)
+
+watchlist <- list(train = train_matrix, test = test_matrix)
+
+#xgb model
+bst_model <- xgb.train(params = xgb_paramns,
+                       data=train_matrix,
+                       nrounds = 100,
+                       watchlist = watchlist)
 
 
 
 ```
 
 
+```{r xgb}
+
+bst_model
+importance <- xgb.importance(feature_names = colnames(train_matrix), model = bst_model)
+head(importance)
+xgb.plot.importance(importance)
+
+e <- data.frame(bst_model$evaluation_log)
+plot(e$iter,e$train_rmse, col='blue') 
+lines(e$iter,e$test_rmse,col='red')
+
+```
+
+PBRAND, MBERMIDD, MOPLLAG, and MOSTYPE are the top 4 features with Gain values greater than 0.08.  "Gain" measures the improvement in accuracy a feature adds to the branches it is on.
 
 
+(c) Use the boosting model to predict the response on the test data.  Predict that a person will make a purchase if the estimated probability of purchase is greater than 20%. Form a confusion matrix. What fraction of the people predicted to make a purchase do in fact make one? How does this compare with the results obtained from applying KNN or logistic regression to this data set?
 
-
-(c) Use the boosting model to predict the response on the test data.  Predict that a person will make a purchase if the estimated probability of purchase is greater than 20 %. Form a confusion matrix. What fraction of the people predicted to make a purchase do in fact make one? How does this compare with the results obtained from applying KNN or logistic regression to this data set?
-
+93.2% of the people predicted actually make a purchase.  These results are similar to 10-fold CV results for KNN (94%) and logistic regression (91.7%).
+ 
 
 ```{r question_11c, echo=TRUE, warnings=FALSE, messages=FALSE}
 
+#xgb predictions
+p <- predict(bst_model,newdata = test_matrix)
+head(p)
+
+##pred <- matrix(p, nrow = nc, ncol = length(p)/nc) %>%
+  #t() %>% 
+  #data.frame() %>%
+  #mutate(label=test_label, max_prob=max.col(.,"last")-1)
+
+level <- c('Y', 'N')
+pred_label <- level[as.numeric(p>0.8)+1]
 
 
+#pred_label <- as.factor(as.numeric(p>0.2))
+#pred_label <- as.numeric(factor(p>0.8))
+#pred_label <- ifelse(p > 0.8, 1, 0)
 
+actual_label <- level[as.numeric(caravan_test$Purchase)+1]
+table(pred_label,test_label)
+#head(pred)
 
-
+(4492)/(4492+290+3+37)
 
 ```
+
+```{r knn, echo=TRUE, message=FALSE, warning=FALSE}
+
+#formula used throughout
+fmla = as.formula(Purchase~.)
+
+#define X.test
+X.test <- hardhat::mold(fmla, data=caravan_test)$predictors
+
+trControl <- caret::trainControl(method="cv", number=10,
+                                     savePredictions=TRUE,
+                                     classProbs = TRUE,
+                                     allowParallel=TRUE)
+
+knnFit = caret::train(Purchase ~ ., data=caravan_train, 
+                 method='knn',
+                 preProcess = c("center", "scale"),
+                 trControl=trControl)
+
+knnFit
+
+#predict values and establish levels
+knn_pred <- predict(knnFit, X.test, type="raw")
+levels(knn_pred) <- c('no','yes')
+
+#cm_truth <- as.factor(test$BlueTarp)
+#confusionMatrix(knn_pred, test_label)
+table(knn_pred, test_label)
+(4529+0)/(4529+293+0+0)
+
+```
+
+
+
+
+Logistic Regression Results
+
+
+```{r log, echo=TRUE, message=FALSE, warning=FALSE}
+
+#formula used throughout
+fmla = as.formula(Purchase~.)
+
+#define X.test
+X.test <- hardhat::mold(fmla, data=caravan_test)$predictors
+
+
+trControl <- caret::trainControl(method="cv", number=10,
+                                     savePredictions=TRUE,
+                                     classProbs = TRUE,
+                                     allowParallel=TRUE)
+
+logitFit = train(fmla, data=caravan_train,
+                 method="glm",
+                 family='binomial',  
+                 trControl=trControl)
+
+logitFit
+
+#predict values and eastablish levels
+logit_pred <- predict(logitFit, X.test, type="raw")
+levels(logit_pred) <- c('no','yes')
+
+table(logit_pred, test_label)
+(4394+30)/(4394+263+30+135)
+
+```
+
+
+
 
 
 
